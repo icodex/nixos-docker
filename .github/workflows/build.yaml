@@ -3,13 +3,12 @@ name: Build nix images
 
 on:
   push:
-    branches: [master, release-*]
-  release:
-    branches: [master, release-*]
+    tags:
+      - 'v*'
+      - '[0-9]*'
 
 env:
-  IMAGE_REPO: "muzi502"
-  IMAGE_NAME: "nixos-nix"
+  IMAGE_REPO: "k8sli/nixos-nix"
   IMAGE_REGISTRY: "ghcr.io"
 
 jobs:
@@ -19,11 +18,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Define image tags by current git repo tag and branch
+      - name: Define image tag by current git repo tag
         shell: bash
-        run: |
-          git describe --tags --always | sed 's/^/IMAGE_TAG=/' >> $GITHUB_ENV
-          git branch --show-current | sed 's/master/latest/;s/release-//;s/^/IMAGE_TAG_BY_BRANCH=/' >> $GITHUB_ENV
+        run: git describe --tags --always | sed 's/^/IMAGE_TAG=/' >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -35,16 +32,13 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ${{ env.IMAGE_REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image
-        run: |
-          docker buildx build \
-                 --pull \
-                 --push \
-                 --platform="linux/amd64,linux/arm64" \
-                 -t ${IMAGE_REGISTRY}/${IMAGE_REPO}/${IMAGE_NAME}:${IMAGE_TAG} \
-                 -t ${IMAGE_REGISTRY}/${IMAGE_REPO}/${IMAGE_NAME}:${IMAGE_TAG_BY_BRANCH} \
-                 -f Dockerfile \
-                 .
+      - name: Build and push images
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          context: .
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
